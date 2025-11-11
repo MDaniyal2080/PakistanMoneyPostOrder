@@ -36,6 +36,33 @@ $customer_name = htmlspecialchars($order['customer']['name'] ?? '');
 $customer_contact = htmlspecialchars($order['customer']['contact'] ?? '');
 $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''));
 
+// Fallback: if any customer field is missing, try to enrich from customers.json by contact or name
+$need_fallback = (($order['customer']['name'] ?? '') === '')
+    || (($order['customer']['contact'] ?? '') === '')
+    || (($order['customer']['address'] ?? '') === '');
+if ($need_fallback) {
+    $customers = read_json(__DIR__ . '/../data/customers.json');
+    $match = null;
+    foreach ($customers as $c) {
+        if (($order['customer']['contact'] ?? null) && (string)$c['contact'] === (string)$order['customer']['contact']) { $match = $c; break; }
+        if (($order['customer']['name'] ?? null) && (string)$c['name'] === (string)$order['customer']['name']) { $match = $c; break; }
+    }
+    if ($match) {
+        if (($order['customer']['name'] ?? '') === '') { $order['customer']['name'] = $match['name'] ?? ''; }
+        if (($order['customer']['contact'] ?? '') === '') { $order['customer']['contact'] = $match['contact'] ?? ''; }
+        if (($order['customer']['address'] ?? '') === '') { $order['customer']['address'] = $match['address'] ?? ''; }
+        // re-sanitize after enrichment
+        $customer_name = htmlspecialchars($order['customer']['name'] ?? '');
+        $customer_contact = htmlspecialchars($order['customer']['contact'] ?? '');
+        $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''));
+    }
+}
+
+$total_numeric = (float)($order['total'] ?? 0);
+$amount_rs = (int)floor($total_numeric);
+$amount_ps = (int)round(($total_numeric - $amount_rs) * 100);
+$amount_ps_str = str_pad((string)$amount_ps, 2, '0', STR_PAD_LEFT);
+
 ?>
 <!doctype html>
 <html lang="ur">
@@ -80,6 +107,15 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
       position: relative;
       border: 2px dashed #333;
       padding: 15px 70px 15px 20px;
+      background: #fff;
+      margin-bottom: 15px;
+      overflow: hidden;
+    }
+    .mo-form2 {
+      width: 100%;
+      position: relative;
+      border: 2px dashed #333;
+      padding: 15px 20px 15px 20px;
       background: #fff;
       margin-bottom: 15px;
       overflow: hidden;
@@ -275,6 +311,24 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
       direction: rtl;
     }
 
+    .address-block { margin-top: 10px; }
+    .address-row { display: flex; align-items: flex-start; gap: 10px; }
+    .address-lines { flex: 1; }
+    .address-lines .dotted { border-top: 1px dotted #333; height: 1px; margin-bottom: 10px; }
+    .address-lines .line { border-top: 1px solid #333; height: 1px; margin-bottom: 12px;     margin-top: 17px;}
+    .addr-brace { display: flex; align-items: center; gap: 8px; }
+    .postal-code-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+    .pc-box { width: 28px; height: 28px; border: 1px solid #333; }
+    .note-text { font-size: 11px; margin-top: 6px; direction: rtl; }
+
+    .receipt-row { display: flex; align-items: center; gap: 6px; justify-content: flex-start; margin: 8px 0; }
+    .receipt-row .sq { width: 24px; height: 24px; border: 1px solid #333; background: #fff; }
+    .receipt-row .label { font-size: 11px;  }
+
+    .caption-over-line { width: 100%; direction: rtl; margin: 8px 0; }
+    .caption-over-line .label { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', Arial, sans-serif; font-size: 14px; display: inline-block; margin-bottom: 4px; }
+    .caption-over-line .rule { border-top: 1px solid #333; height: 0; width: 100%; }
+
     /* Instruction block (front center) */
     .inst-block { direction: rtl; text-align: right; font-size: 12px; line-height: 1.6; }
     .inst-block .solid { border-top: 1px solid #333; margin: 6px 0 6px; }
@@ -284,7 +338,7 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
 
     /* Page 2 Styles */
     .green-section {
-      background: #cfead4;
+      background-color: #38c077;
       border: 2px solid #4caf50;
       padding: 10px;
       margin-bottom: 15px;
@@ -325,7 +379,7 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
     }
 
     .back-right {
-      width: 170px;
+      width: 149px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -351,7 +405,7 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
 
     /* Green writing area inside body (scan-style) */
     .green-writing {
-      background: repeating-linear-gradient(90deg, #38c077 0 18px, #30b26d 18px 36px);
+      background-color: #38c077;
       border: 2px solid #333;
       padding: 8px 10px 10px;
       position: relative;
@@ -359,7 +413,7 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
     .green-writing .rule { height: 22px; border-bottom: 1px solid #333; }
     .receipt-inline { display: flex; align-items: center; gap: 6px; margin: 6px 0; max-width: 60%; }
     .receipt-inline .sq { width: 24px; height: 24px; border: 1px solid #333; background: #fff; }
-    .receipt-inline .label { font-size: 11px; color: #b71c1c; }
+    .receipt-inline .label { font-size: 11px; }
 
     /* Amount panel (top-right) */
     .green-writing .amount { position: absolute; right: 15px; top: 8px; width: 240px; direction: rtl; }
@@ -371,7 +425,8 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
     .top-right-box {
       border: 2px solid #333;
       padding: 8px;
-      width: 160px;
+      width: 173px;
+      height: 81px;
       text-align: center;
       margin-left: auto;
       background: #fff;
@@ -397,10 +452,10 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
     .instr-wrap { position: relative; margin: 8px 0 28px 0; min-height: 80px; padding-top: 6px; }
     .instr-wrap .instr-urdu { text-align: center; margin: 0; }
     .instr-wrap .top-right-box { position: absolute; right: 0; top: 16px; margin: 0; }
-    .instr-wrap .center-content { width: calc(100% - 240px); margin: 0 auto; padding-right: 24px; }
+    .instr-wrap .center-content { padding-right: 98px; }
 
     /* Right-side curly bracket groups */
-    .side-group { display: flex; align-items: center; gap: 8px; min-height: 70px; }
+    .side-group { display: flex; align-items: center; gap: 8px; min-height: 83px; }
     .brace { position: relative; width: 16px; height: 100%; }
     .brace:before,
     .brace:after { content: ""; position: absolute; left: 0; width: 12px; border-left: 2px solid #333; }
@@ -558,13 +613,8 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
     </div>
           </div>
       </div>
-        </div>
 
-     
-
-
-        <!-- Footer Section -->
-        <div class="footer-section" style="display:flex; align-items:center; gap: 16px;">
+      <div class="footer-section" style="display:flex; align-items:center; gap: 16px;">
           <!-- Left: two signature lines aligned like reference --> 
           <div style="width: 34%; display:flex; flex-direction:column; gap: 10px;">
             <div style="display:flex; align-items:center; gap:8px; justify-content:flex-end;">
@@ -587,19 +637,25 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
             <div class="round-stamp"></div>
           </div>
         </div>
-          </div>
-
-          <div style="margin-top: 6px;">
+        <div style="margin-top: 6px;">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap: 16px;">
               <!-- Left: two long lines for Paisa and Rupee -->
               <div style="width: 60%; display:flex; flex-direction:column; gap: 10px;">
+                
                 <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;">
-                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
-                  <span class="form-label urdu-text">پیسے</span>
+                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;">
+<?= $amount_ps_str ?>
+                  </div>
+                  <span class="form-label urdu-text">پیسہ</span>
+                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;">
+<?= number_format($amount_rs) ?>
+                  </div>
+                  <span class="form-label urdu-text">روپیہ</span>
                 </div>
                 <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;">
                   <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
-                  <span class="form-label urdu-text">روپے</span>
+                  <div class="form-label urdu-text">مبلغ</div>
+                  
                 </div>
               </div>
 
@@ -607,125 +663,69 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
               <div style="width: 40%; display:flex; align-items:center; gap: 10px; justify-content:flex-start;">
                 <div class="brace" style="height: 44px;"></div>
                 <div class="urdu-text" style="line-height:1.2; text-align:right; white-space:nowrap;">
-                  <div>روپے</div>
-                  <div>پیسے</div>
+                  <div>مبلغ</div>
+                  <div>روپیہ</div>
                 </div>
-                <span class="form-label urdu-text" style="white-space:nowrap;">رقم منی آرڈر (ہندسوں اور حروف میں)</span>
+                <span class="form-label urdu-text" style="white-space:nowrap;">رقم منی آرڈر (ہندسوں اور عبارت میں )</span>
               </div>
             </div>
-          </div>
-
-          <div style="margin-top: 6px;">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap: 16px;">
-              <!-- Left: two long lines for Paisa and Rupee -->
-              <div style="width: 60%; display:flex; flex-direction:column; gap: 10px;">
-                <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;">
-                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
-                  <span class="form-label urdu-text">پیسے</span>
-                </div>
-                <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;">
-                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
-                  <span class="form-label urdu-text">روپے</span>
-                </div>
-              </div>
-
-              <!-- Right: curly brace with labels and caption -->
-              <div style="width: 40%; display:flex; align-items:center; gap: 10px; justify-content:flex-start;">
-                <div class="brace" style="height: 44px;"></div>
-                <div class="urdu-text" style="line-height:1.2; text-align:right; white-space:nowrap;">
-                  <div>روپے</div>
-                  <div>پیسے</div>
-                </div>
-                <span class="form-label urdu-text" style="white-space:nowrap;">رقم منی آرڈر (ہندسوں اور حروف میں)</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Second row with box and signatures -->
-          <div style="display: flex; justify-content: space-between; align-items: start; margin: 15px 0;">
-            <div class="info-box" style="width: 120px; height: 60px;"></div>
             
-            <div style="flex: 1; margin: 0 20px;">
-              <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                  <span class="form-label urdu-text">(اعداد میں) __________</span>
-                </div>
-                <div style="flex: 1;">
-                  <span class="form-label urdu-text">قسم نمبر آرڈر (مندرجہ بالا اور حروف میں)</span>
+          </div>
+          
+          <div class="stamp-section" style="padding-right: 0; display:flex; height: 100px;">
+
+
+  <!-- Middle Signature Section -->
+  <div style="width: 100%;margin-top: 22px;">
+   <div style="margin-right: 0;">
+        <div class="form-row ltr" style="padding-right: 0;margin-left: 176px;">
+          <div class="form-field" style="flex: 1;">&nbsp;<?= $customer_name ?></div>
+          <span class="form-label urdu-text" >وصول کرنے والے کا نام</span>
+        </div>
+        <div class="form-row ltr" style="padding-right: 0;margin-left: 300px;">
+          <div class="form-field" style="flex: 1;"></div>
+          <span class="form-label urdu-text" >مہر و دستخط</span>
+        </div>
+        <div class="form-row ltr" style="padding-right: 0;margin-left: 300px;">
+          <div class="form-field" style="flex: 1;">&nbsp;<?= $date ?></div>
+          <span class="form-label urdu-text" >تاریخ</span>
+        </div>
+        </div>
+   
+  </div>
+  
+</div>
+
+<div style="margin-top: 18px; border-top:2px dashed #000;"></div>
+
+<div class="address-block">
+            <div class="address-row">
+              <div class="address-lines">
+                <div class="line"></div>
+                <div class="line"></div>
+                <div class="line"></div>
+              </div>
+              <div class="addr-brace">
+                <div class="brace" style="height: 58px;"></div>
+                <div class="urdu-text" style="line-height:1.2; text-align:right; white-space:nowrap;">
+                  <div>منی آرڈر</div>
+                  <div>بھیجنے والے کا</div>
+                  <div>نام اور پتہ</div>
                 </div>
               </div>
-              <div style="display: flex; gap: 15px; margin-top: 10px;">
-                <div style="flex: 1;">
-                  <div class="signature-line" style="width: 100%; margin-bottom: 5px;"></div>
-                  <span class="form-label urdu-text">رقم نمبر</span>
-                </div>
-                <div style="flex: 1;">
-                  <div class="signature-line" style="width: 100%; margin-bottom: 5px;"></div>
-                  <span class="form-label urdu-text">بھیجنے والے کے دستخط</span>
-                </div>
-              </div>
-              <div style="display: flex; gap: 15px; margin-top: 10px;">
-                <div style="flex: 1;">
-                  <div class="signature-line" style="width: 100%; margin-bottom: 5px;"></div>
-                  <span class="form-label urdu-text">تاریخ</span>
-                </div>
-                <div style="flex: 1;">
-                  <div class="signature-line" style="width: 100%; margin-bottom: 5px;"></div>
-                  <span class="form-label urdu-text">وصول نمبر کے واسطے کا نام</span>
-                </div>
-              </div>
+            </div>
+            <div class="postal-code-row">
+              <div class="pc-box"></div><div class="pc-box"></div><div class="pc-box"></div><div class="pc-box"></div><div class="pc-box"></div>
+            </div>
+            <span class="urdu-text" style="font-size:11px; margin-left: 58px;margin-top:10px">(پوسٹ کوڈ)</span>
+            <div class="note-text urdu-text">نوٹ: رقم وصول کرنے سے پہلے وصول کرنے والے کو منی آرڈر اور دونوں رسیدوں پر دستخط کرنے چاہئیں۔</div>
+          </div>
+        </div>
             </div>
           </div>
 
-          <div style="margin-top: 10px;">
-            <div class="form-row ltr" style="padding-right:0; gap:8px; margin-bottom:8px;">
-              <div class="form-field" style="flex:1;"></div>
-              <span class="form-label urdu-text">وصول کرنے والے کا نام</span>
-            </div>
-            <div class="form-row ltr" style="padding-right:0; gap:8px; justify-content:flex-end; margin-bottom:6px;">
-              <div class="form-field" style="flex:0 0 180px;"></div>
-              <span class="form-label urdu-text">مصدقہ</span>
-            </div>
-            <div class="form-row ltr" style="padding-right:0; gap:8px; justify-content:flex-end;">
-              <div class="form-field" style="flex:0 0 180px;"></div>
-              <span class="form-label urdu-text">تاریخ</span>
-            </div>
-          </div>
+          </div>       
 
-          <!-- Bottom dashed line section -->
-            <div style="border-top: 2px dashed #333; margin-top: 15px; padding-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="flex: 1;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                  <div class="signature-line" style="width: 150px;"></div>
-                  <span class="form-label urdu-text">منی آرڈر</span>
-                </div>
-              </div>
-              <div style="flex: 1;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                  <div class="signature-line" style="width: 120px;"></div>
-                  <span class="form-label urdu-text">کمیشن واصل کیا</span>
-                </div>
-              </div>
-              <div style="flex: 1;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                  <div class="signature-line" style="width: 120px;"></div>
-                  <span class="form-label urdu-text">نمبر</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Bottom boxes and text -->
-            <div style="display: flex; align-items: flex-end; margin-top: 15px;">
-              <div class="receipt-boxes">
-                <div class="receipt-box"></div>
-                <div class="receipt-box"></div>
-                <div class="receipt-box"></div>
-                <div class="receipt-box"></div>
-                <div class="receipt-box"></div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -734,11 +734,11 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
 
   <!-- PAGE 2 - Back Page of Money Order -->
   <div class="a4">
-    <div class="mo-form">
+    <div class="mo-form2">
       
       <!-- Green Receipt Section -->
+      <div style="font-weight: bold; font-size: 12px; margin-bottom: 6px;">Oblong M.O. and Month Stamp of Issue</div>
       <div class="green-section">
-        <div style="font-weight: bold; font-size: 12px; margin-bottom: 6px;">Oblong M.O. and Month Stamp of Issue</div>
         <!-- Row 1: long stamp box + narrow box (left), MO no/date (right) -->
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
           <div style="display: flex; align-items: stretch; gap: 6px; width: 58%;">
@@ -746,10 +746,10 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
             <div class="green-box" style="height: 52px; width: 60px;"></div>
           </div>
           <div style="width: 38%; text-align: right;">
-            <div style="font-size: 12px;">M.O. No. <span style="display:inline-block; min-width: 120px; border-bottom: 1px solid #2e7d32;"></span></div>
+            <div style="font-size: 12px;">M.O. No. <span style="display:inline-block; min-width: 120px; border-bottom: 1px solid #2e7d32;">&nbsp;<?= $order_no ?></span></div>
             <div style="display:flex; justify-content:flex-end; align-items:center; gap: 10px; margin-top: 4px;">
               <span style="font-size: 12px;">Date</span>
-              <span style="display:inline-block; min-width: 90px; border-bottom: 1px solid #2e7d32;"></span>
+              <span style="display:inline-block; min-width: 90px; border-bottom: 1px solid #2e7d32;">&nbsp;<?= $date ?></span>
             </div>
           </div>
         </div>
@@ -758,7 +758,7 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="flex: 1; display:flex; align-items:center; gap: 6px; font-size: 12px;">
             <span>Issued for Rs</span>
-            <span style="flex: 1; border-bottom: 1px solid #2e7d32;"></span>
+            <span style="flex: 1; border-bottom: 1px solid #2e7d32;">&nbsp;<?= number_format($amount_rs) ?>.<?= $amount_ps_str ?></span>
           </div>
           <div style="width: 38%; display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
           
@@ -772,15 +772,18 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
           <div style="width: 43%; text-align: center;">
             <div style="border-top: 1px solid #2e7d32; padding-top: 4px; font-size: 12px;">M.O. Clerk</div>
           </div>
-          <div style="width: 43%; text-align: center;">
+           <div style="width: 10%; text-align: center;">
+            
+          </div>
+          <div style="width: 43%; text-align: center;padding-right: 20px;">
             <div style="border-top: 1px solid #2e7d32; padding-top: 4px; font-size: 12px;">Issuing Postmaster</div>
           </div>
           <div style="display:flex; justify-content:flex-end;">
             <div style="display:flex; align-items:center; gap: 8px; border: 1px solid #2e7d32; background: #fff; padding: 6px 8px;">
               <span style="font-size: 12px;">Rs.</span>
-              <div style="width: 56px; height: 22px; border: 1px solid #2e7d32;"></div>
+              <div style="width: 56px; height: 22px; border: 1px solid #2e7d32;">&nbsp;<?= number_format($amount_rs) ?></div>
               <span style="font-size: 12px;">Ps.</span>
-              <div style="width: 56px; height: 22px; border: 1px solid #2e7d32;"></div>
+              <div style="width: 56px; height: 22px; border: 1px solid #2e7d32;">&nbsp;<?= $amount_ps_str ?></div>
             </div>
           </div>
         </div>
@@ -788,48 +791,51 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
 
       <!-- Middle Section with Instructions -->
       <div style="border-top: 2px dashed #333; padding-top: 10px;">
-        <div class="instr-wrap">
-          <div class="top-right-box urdu-text"><strong>عام رسید آرڈر</strong><br><span style="font-size: 11px;">(اندراج/افسر)</span></div>
+        <div class="instr-wrap">>
+          <div class="top-right-box urdu-text" style="display:flex;">
+            <strong style="width: 50%;font-size: 16px;margin-top: 16px;">عام منی آرڈر</strong><br>
+            <span style="font-size: 15px;width: 50%;">بذریعہ تار
+معمولی یا ایکسپریس</span>
+          </div>
           <div class="center-content">
-            <div class="urdu-text" style="font-size: 14px; margin-bottom: 6px; text-align: center;">مندرجہ ذیل خانے ارسال کنندہ کی ہدایات کے مطابق پُر کریں</div>
+            <div class="urdu-text" style="font-size: 14px; margin-bottom: 6px; text-align: center;">ذیل کے تمام اندراج منی آرڈر بھیجنے والے کو کرنے ہیں</div>
             <div class="instr-urdu urdu-text">
-              دی گئی ہدایات کے مطابق منی آرڈر درست طور پر تحریر کریں<br>
-              رقم اور نام واضح لکھیں، غلطی کی صورت میں درست اندراج کروائیں
-            </div>
+          نوٹ: منی آرڈر فارم پر غلط نام یا نا عمل پر لکھنے کی وجہ سے اگر<br>
+    منی آرڈر کسی غلط شخص کو ادا ہو جائے تو محکمہ ذمہ دار نہ ہوگا۔          </div>
           </div>
         </div>
-
+ <div style="border-top: 2px dashed #333; padding-top: 10px;">
         <!-- Main Body Section -->
         <div style="display: flex; gap: 15px; align-items: stretch;">
           <!-- Left green writing area (scan-style) -->
           <div class="green-writing" style="flex: 1;">
-            <div class="rule"></div>
-            <div class="amount">
-              <div class="title urdu-text">مبلغ</div>
-              <div class="amounts">
-                <div class="segment">
-                  <span class="urdu-text">روپیہ</span>
-                  <div class="hr short"></div>
+           <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;">
+                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
+                  <span class="form-label urdu-text">پیسہ</span>
+                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
+                  <span class="form-label urdu-text">روپیہ</span>
                 </div>
-                <div class="segment">
-                  <span class="urdu-text">پیسے</span>
-                  <div class="hr short"></div>
+                <div class="form-row ltr" style="gap: 8px; padding-right:0; margin-bottom:0;margin-top:10px">
+                  <div style="flex:1; border-bottom:1px solid #000; height: 18px;"></div>
+                  <div class="form-label urdu-text">مبلغ</div>
+                  
                 </div>
-              </div>
+            <div class="rule">&nbsp;<?= $customer_name ?></div>
+            <div class="rule">&nbsp;<?= $customer_address ?></div>
+            <div class="rule">&nbsp;<?= $customer_contact ?></div>
+            <div class="receipt-inline" style="margin-left: 10px;">
+              <div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
+              <span class="label urdu-text">(پوست کود)</span>
             </div>
+            <div style="border-bottom: 1px solid #333;"></div>
+            <div class="rule"></div>
+            <div class="rule"></div>
             <div class="rule"></div>
             <div class="receipt-inline" style="margin-left: 10px;">
               <div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
-              <span class="label urdu-text">(رسید نمبر)</span>
+              <span class="label urdu-text">(پوست کود)</span>
             </div>
-            <div class="rule"></div>
-            <div class="rule"></div>
-            <div class="rule"></div>
-            <div class="receipt-inline" style="margin-left: 10px;">
-              <div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
-              <span class="label urdu-text">(رسید نمبر)</span>
-            </div>
-            <div class="rule"></div>
+            <div style="border-bottom: 1px solid #333;"></div>
           </div>
 
           <!-- Right side curly-brace label groups -->
@@ -837,114 +843,106 @@ $customer_address = nl2br(htmlspecialchars($order['customer']['address'] ?? ''))
             <div class="side-group">
               <div class="brace"></div>
               <div class="urdu-text" style="font-size: 12px; text-align: right; line-height: 1.4;">
-                رقم بھیجنے والا<br>شناخت/حوالہ
+                رقم ہندسوں اور<br>عبارت میں
               </div>
             </div>
             <div class="side-group">
               <div class="brace"></div>
               <div class="urdu-text" style="font-size: 12px; text-align: right; line-height: 1.4;">
-                وصول کنندہ کا نام<br>اور مکمل پتہ
+                وصول کرنے والے<br>کا نام مکمل پتہ<br>اور<br>ٹیلیفون نمبر
               </div>
             </div>
             <div class="side-group">
               <div class="brace"></div>
               <div class="urdu-text" style="font-size: 12px; text-align: right; line-height: 1.4;">
-                تفصیلات / کمیشن
+                بھیجنے والے<br>کا نام مکمل پتہ<br>اور<br>ٹیلیفون نمبر
               </div>
             </div>
           </div>
         </div>
       </div>
+      <div style="display:flex; margin-top:10px">
+<div class="form-row ltr" style=" width:63%;">
+          <div class="form-field" style="flex: 1;"></div>
+          <span class="form-label urdu-text" >منی آرڈر بھیجنے والے کے دستخط</span>
+        </div>
+        <div style="width:10%;"></div>
+        <div class="form-row ltr" style=" width:40%;">
+          <div class="form-field" style="flex: 1;"></div>
+          <span class="form-label urdu-text" >تاریخ</span>
+        </div>
+  </div>
+        </div>
 
+        
       <!-- Bottom Signature Section -->
       <div style="border-top: 2px dashed #333; margin-top: 15px; padding-top: 10px;">
-        <div style="text-align: center; margin-bottom: 10px;">
-          <span class="urdu-text" style="font-size: 13px;">منی آرڈر بھیجنے والے کے لیے رسید</span>
-        </div>
+       
 
-        <div style="display: flex; justify-content: space-between; margin: 15px 0;">
-          <div style="flex: 1;">
-            <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-            <span class="urdu-text" style="font-size: 11px;">پاکستان پوسٹ</span>
-          </div>
-          <div style="flex: 1; text-align: center;">
-            <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-            <span class="urdu-text" style="font-size: 11px;">منی آرڈر بھیجنے والے کے لیے رسید</span>
-          </div>
+        <div style="display: flex;margin-top:10px; ">
+          
+           <div style="width:50%;text-align: center;"> 
+            <span class="urdu-text" style="font-size: 18px;
+    font-weight: bold;">پاکستان پوسٹ</span>
         </div>
-
-        <div style="display: flex; justify-content: space-between; margin: 15px 0;">
-          <div style="flex: 1;">
-            <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-            <span class="urdu-text" style="font-size: 11px;">منی آرڈر بھیجنے والے کا نام</span>
-          </div>
-          <div style="flex: 1;">
-            <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-            <span class="urdu-text" style="font-size: 11px;">دستخط</span>
+          <div style="width:50%;text-align: end;">
+            
+            <span class="urdu-text" style="font-size: 18px;
+    font-weight: bold;">منی آرڈر بھیجنے والے کے لیے رسید</span>
           </div>
         </div>
 
-        <div style="display: flex; gap: 0; margin: 15px 0;">
-          <?php for($k = 0; $k < 5; $k++): ?>
-          <div style="width: 30px; height: 30px; border: 1px solid #333;"></div>
-          <?php endfor; ?>
-          <span style="margin-left: 10px; font-size: 11px;" class="urdu-text">(پوسٹ گائیڈ)</span>
+  <div class="form-row ltr" style="padding-right: 0;margin-top: 42px;">
+          <div class="form-field" style="flex: 1;"></div>
+          <span class="form-label urdu-text" >منی آرڈر بھیجنے والے کے کا نام</span>
         </div>
+        <div class="form-row ltr" style="padding-right: 0;">
+          <div class="form-field" style="flex: 1;"></div>
+          <span class="form-label urdu-text" >اور کمل پت</span>
+        </div>
+        <div class="form-row ltr" style="padding-right: 0;">
+        <div class="form-field" style="flex: 1;"></div>
+  </div>
+        
+
+       
 
         <!-- Footer Dashed Line -->
-        <div style="border-top: 2px dashed #333; margin-top: 15px; padding-top: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-              <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-              <span class="urdu-text" style="font-size: 11px;">پاکستان پوسٹ</span>
-            </div>
-            <div style="flex: 1; text-align: center;">
-              <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-              <span class="urdu-text" style="font-size: 11px;">منی آرڈر بھیجنے والے کے لیے رسید</span>
-            </div>
-          </div>
+       
 
-          <div style="display: flex; justify-content: space-between; margin: 15px 0;">
-            <div style="flex: 1;">
-              <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-              <span class="urdu-text" style="font-size: 11px;">منی آرڈر بھیجنے والے کا نام</span>
-            </div>
-            <div style="flex: 1;">
-              <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-              <span class="urdu-text" style="font-size: 11px;">دستخط</span>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 0; margin: 15px 0;">
+          
+          <div class="receipt-row" style="justify-content:flex-start; gap:6px; margin: 8px 0;">
             <?php for($k = 0; $k < 5; $k++): ?>
-            <div style="width: 30px; height: 30px; border: 1px solid #333;"></div>
+            <div class="sq"></div>
             <?php endfor; ?>
-            <span style="margin-left: 10px; font-size: 11px;" class="urdu-text">(پوسٹ گائیڈ)</span>
+            <span class="label urdu-text">(پوست کود)</span>
           </div>
 
-          <!-- Footer Dashed Line -->
-          <div style="border-top: 2px dashed #333; margin-top: 15px; padding-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="flex: 1;">
-                <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-                <span class="urdu-text" style="font-size: 11px;">تصدیق</span>
-              </div>
-              <div style="flex: 1;">
-                <div style="border-bottom: 1px solid #333; margin-bottom: 5px; height: 20px;"></div>
-                <span class="urdu-text" style="font-size: 11px;">رویہ</span>
-              </div>
-              <div style="flex: 1; text-align: center;">
-                <span class="urdu-text" style="font-size: 12px;">کیوں منی آرڈر کمیشن رقم آرڈر وصول کرنے والے کے نام<br>جاری کیا گیا استعمال کے لیے پانا ضروری اور بحوالہ تحقیق کے لیے</span>
-              </div>
+          <div style="border-top: 1px dashed #333; margin: 6px 0 10px;"></div>
+<div style="display: flex;">
+          <div class="form-row ltr" style="gap: 8px; padding: 10px; margin-top: 10px;width:20%;">
+            <div style="flex:1; border-bottom:1px solid #333; height: 18px;">&nbsp;<?= $amount_ps_str ?></div>
+            <span class="form-label urdu-text">پیسہ</span>
+            </div>
+            <div class="form-row ltr" style="gap: 8px; padding: 10px; margin: 0 0 6px 0;width:20%;">
+            <div style="flex:1; border-bottom:1px solid #333; height: 18px;">&nbsp;<?= number_format($amount_rs) ?></div>
+            <span class="form-label urdu-text">روپیہ</span>
+            </div>
+             <div class="form-row ltr" style="gap: 8px; padding-right:0; margin: 0 0 6px 0;width:60%;">
+            
+            <span class="form-label urdu-text">کوپن: منی آرڈر بھیجنے والا اس جگہ پر منی آرڈر وصول کرنے والے کو کچھ<br>
+               چاہے تو لکھ سکتا ہے اور پشت پر اپنا نام اور پتہ درج کر سکتا ہے۔</span>
             </div>
           </div>
+            </div>
+          <!-- Footer Dashed Line -->
+      
 
           <!-- Bottom Footer -->
-          <div style="margin-top: 20px; padding-top: 10px; text-align: center;">
-            <span style="font-size: 10px; font-style: italic;">Pakistan Post Foundation (Press Division)</span>
-            <div style="float: right; font-size: 11px;" class="urdu-text">
-              نوٹ: اگر یہ آرڈر کمیشن سے متعلق ہیں تو ان کو پیش کریں
-            </div>
+          <div style="margin-top: 20px; padding-top: 10px; position: relative;">
+            <span style="font-size: 10px; font-style: italic; display:inline-block;">Pakistan Post Foundation (Press Division)</span>
+            <div style="position:absolute; right: 0; bottom: -2px; font-size: 11px; color:#b71c1c; font-style: italic;" class="urdu-text">
+              قیمت ایک روپیہ جو کہ منی آرڈر کمیشن سے منہا نہیں ہو گی۔            </div>
           </div>
         </div>
       </div>
